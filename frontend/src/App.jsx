@@ -21,9 +21,8 @@ import FactoryABI from "../artifacts/contracts/VotingFactory.sol/VotingFactory.j
 import CptABI from "../artifacts/contracts/CPT.sol/CPT.json";
 
 // --- CONFIGURATION ---
-const FACTORY_ADDRESS = "0x13AA23DA8ea256D41Ca9F4b4e727B5d9454f6D7B";
-// Backup: "https://rpc.sepolia.org"
-const SEPOLIA_RPC_URL = "https://1rpc.io/sepolia";
+const FACTORY_ADDRESS = "0x13AA23DA8ea256D41Ca9F4b4e727B5d9454f6D7B";// Backup: "https://rpc.sepolia.org"
+const SEPOLIA_RPC_URL = "https://gateway.tenderly.co/public/sepolia";
 
 function App() {
   // --- STATE ---
