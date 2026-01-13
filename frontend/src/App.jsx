@@ -14,13 +14,15 @@ import {
 } from 'recharts';
 
 // --- ARTIFACT IMPORTS ---
-// Ensure these paths match your folder structure exactly
+// Ensure these paths exist in your project.
+// If Vercel fails to find them, move the JSON files to the 'src' folder and update these imports to "./Voting.json" etc.
 import VotingABI from "../artifacts/contracts/Voting.sol/Voting.json";
 import FactoryABI from "../artifacts/contracts/VotingFactory.sol/VotingFactory.json";
 import CptABI from "../artifacts/contracts/CPT.sol/CPT.json";
 
 // --- CONFIGURATION ---
 const FACTORY_ADDRESS = "0x13AA23DA8ea256D41Ca9F4b4e727B5d9454f6D7B";
+const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"; // Backup: "https://rpc.sepolia.org"
 
 function App() {
   // --- STATE ---
@@ -57,17 +59,23 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
-      // 1. Load Read-Only Data (Factory)
+      // 1. Load Read-Only Data (Factory) using Public Sepolia Node
       try {
-        const readProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+        const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
         const readFactory = new ethers.Contract(FACTORY_ADDRESS, FactoryABI.abi, readProvider);
         await loadElections(readFactory);
-      } catch (e) { console.log("Node not running"); }
+      } catch (e) {
+        console.log("Could not load elections from public node:", e);
+      }
 
       // 2. Auto-Connect Wallet if available
       if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: "eth_accounts" });
-        if (accounts.length > 0) connectWallet();
+        try {
+          const accounts = await window.ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) connectWallet();
+        } catch (e) {
+          console.error("Auto-connect failed", e);
+        }
       }
     };
     init();
@@ -75,6 +83,8 @@ function App() {
 
   const connectWallet = async () => {
     try {
+      if (!window.ethereum) return setMessage("Please install MetaMask");
+
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       setAccount(accounts[0]);
 
@@ -86,6 +96,7 @@ function App() {
       const factory = new ethers.Contract(FACTORY_ADDRESS, FactoryABI.abi, signer);
       setFactoryContract(factory);
 
+      // Reload elections with signer to be safe, though read-only worked above
       loadElections(factory);
       fetchCPTBalance(factory, signer, accounts[0]);
 
@@ -120,7 +131,7 @@ function App() {
         list.push({ address: addr, title: title });
       }
       setElections(list);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Error loading elections:", e); }
   };
 
   const createElection = async () => {
@@ -141,6 +152,7 @@ function App() {
   };
 
   const enterElection = async (addr, title) => {
+    if (!signer) return setMessage("Please connect wallet first");
     setLoading(true);
     try {
       const contract = new ethers.Contract(addr, VotingABI.abi, signer);
@@ -168,25 +180,33 @@ function App() {
   };
 
   const loadCandidates = async (contract) => {
-    const list = await contract.getAllCandidates();
-    setCandidates(list.map(c => ({ id: Number(c.id), name: c.name, voteCount: Number(c.voteCount) })));
+    try {
+      const list = await contract.getAllCandidates();
+      setCandidates(list.map(c => ({ id: Number(c.id), name: c.name, voteCount: Number(c.voteCount) })));
+    } catch (e) {
+      console.error("Error loading candidates", e);
+    }
   };
 
   const loadGroup = async (contract) => {
-    const id = await contract.groupId();
-    const semAddr = await contract.semaphore();
+    try {
+      const id = await contract.groupId();
+      const semAddr = await contract.semaphore();
 
-    // FIX: Use a public Sepolia RPC instead of localhost
-    const rProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+      // FIX: Always use public node for Semaphore events to avoid local node errors
+      const rProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
 
-    const semABI = ["event MemberAdded(uint256 indexed groupId, uint256 index, uint256 identityCommitment, uint256 merkleTreeRoot)"];
-    const semContract = new ethers.Contract(semAddr, semABI, rProvider);
+      const semABI = ["event MemberAdded(uint256 indexed groupId, uint256 index, uint256 identityCommitment, uint256 merkleTreeRoot)"];
+      const semContract = new ethers.Contract(semAddr, semABI, rProvider);
 
-    // Fetch events from the Sepolia blockchain
-    const events = await semContract.queryFilter(semContract.filters.MemberAdded(id), 0, "latest");
-    const members = events.map(e => e.args.identityCommitment);
+      // Fetch events from the Sepolia blockchain
+      const events = await semContract.queryFilter(semContract.filters.MemberAdded(id), 0, "latest");
+      const members = events.map(e => e.args.identityCommitment);
 
-    setGroup(new Group(members));
+      setGroup(new Group(members));
+    } catch (e) {
+      console.error("Error loading group members:", e);
+    }
   };
 
   // --- ZK LOGIC ---
@@ -199,7 +219,13 @@ function App() {
 
   useEffect(() => {
     const saved = localStorage.getItem("blockvote-identity");
-    if (saved) setIdentity(new Identity(saved));
+    if (saved) {
+      try {
+        setIdentity(new Identity(saved));
+      } catch (e) {
+        console.error("Invalid saved identity");
+      }
+    }
   }, []);
 
   const joinGroup = async () => {
@@ -210,7 +236,10 @@ function App() {
       await tx.wait();
       setMessage("Registered on Blockchain!");
       loadGroup(votingContract);
-    } catch (e) { setMessage("Registration failed"); }
+    } catch (e) {
+      console.error(e);
+      setMessage("Registration failed (Check console)");
+    }
     setLoading(false);
   };
 
@@ -219,7 +248,10 @@ function App() {
     if (hasVoted) return setMessage("Already voted");
     setLoading(true);
     try {
+      // Refresh group to ensure Merkle Tree is up to date
       await loadGroup(votingContract);
+
+      // Artificial delay to ensure state update
       await new Promise(r => setTimeout(r, 1000));
 
       const groupId = await votingContract.groupId();
