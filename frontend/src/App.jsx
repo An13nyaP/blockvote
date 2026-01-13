@@ -15,9 +15,9 @@ import {
 
 // --- ARTIFACT IMPORTS ---
 // Ensure these paths match your folder structure exactly
-import VotingABI from "../../backend/artifacts/contracts/Voting.sol/Voting.json";
-import FactoryABI from "../../backend/artifacts/contracts/VotingFactory.sol/VotingFactory.json";
-import CptABI from "../../backend/artifacts/contracts/CPT.sol/CPT.json";
+import VotingABI from "../artifacts/contracts/Voting.sol/Voting.json";
+import FactoryABI from "../artifacts/contracts/VotingFactory.sol/VotingFactory.json";
+import CptABI from "../artifacts/contracts/CPT.sol/CPT.json";
 
 // --- CONFIGURATION ---
 const FACTORY_ADDRESS = "0x13AA23DA8ea256D41Ca9F4b4e727B5d9454f6D7B";
