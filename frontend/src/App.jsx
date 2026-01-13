@@ -175,12 +175,17 @@ function App() {
   const loadGroup = async (contract) => {
     const id = await contract.groupId();
     const semAddr = await contract.semaphore();
-    // Read-only provider for events to avoid signer lag
-    const rProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+
+    // FIX: Use a public Sepolia RPC instead of localhost
+    const rProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+
     const semABI = ["event MemberAdded(uint256 indexed groupId, uint256 index, uint256 identityCommitment, uint256 merkleTreeRoot)"];
     const semContract = new ethers.Contract(semAddr, semABI, rProvider);
+
+    // Fetch events from the Sepolia blockchain
     const events = await semContract.queryFilter(semContract.filters.MemberAdded(id), 0, "latest");
     const members = events.map(e => e.args.identityCommitment);
+
     setGroup(new Group(members));
   };
 
