@@ -1,0 +1,7 @@
+{
+  "VotingFactoryModule#CPT": "0xdCa448790eFeC2DfF101d1A16F7Eeda8A86215d9",
+  "VotingFactoryModule#PoseidonT3": "0x9FD7B8C1758d190B356ff9EfDe3D203fAA0D5232",
+  "VotingFactoryModule#SemaphoreVerifier": "0x1dFF367d588c4DCB1A1Ef7D57b13A1a74D923035",
+  "VotingFactoryModule#Semaphore": "0xcF3f83D4b80fC1AB28f9D0100fb8D0836Ff4862B",
+  "VotingFactoryModule#VotingFactory": "0x13AA23DA8ea256D41Ca9F4b4e727B5d9454f6D7B"
+}

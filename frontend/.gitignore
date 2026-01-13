@@ -7,10 +7,37 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
 *.local
+
+# ---------------------------------
+# 🔒 SECURITY (CRITICAL)
+# ---------------------------------
+.env
+.env.*
+!.env.example
+# Exclude any other files that might contain keys
+secrets.json
+private-key.txt
+
+# ---------------------------------
+# 🏗️ HARDHAT / BACKEND
+# ---------------------------------
+# Compiled contract artifacts (these are large and auto-generated)
+artifacts/
+cache/
+typechain-types/
+
+# Testing coverage reports
+coverage/
+coverage.json
+
+# Hardhat Ignition (Deployment history)
+# We usually ignore the local chain folder as it changes constantly
+ignition/deployments/chain-31337/
 
 # Editor directories and files
 .vscode/*

@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// 1. We only import the INTERFACES
 import "@semaphore-protocol/contracts/interfaces/ISemaphore.sol";
 import "@semaphore-protocol/contracts/interfaces/ISemaphoreVerifier.sol";
 import "hardhat/console.sol";
-import "./CPT.sol"; // <-- 1. IMPORT ADDED
+
+// We define a simple interface so Voting can talk to the Factory
+interface IVotingFactory {
+    function distributeReward(address recipient) external;
+}
 
 contract Voting {
     // --- State Variables ---
-
     struct Candidate {
         uint id;
         string name;
@@ -19,55 +21,75 @@ contract Voting {
     mapping(uint => Candidate) public candidates;
     uint public candidatesCount;
 
-    // 2. We store an INSTANCE of the Semaphore contract
     ISemaphore public semaphore;
     uint256 public groupId;
 
-    CPT public cpt; // <-- 2. TOKEN CONTRACT VARIABLE ADDED
+    // NEW: Store the Election Organizer and the Factory address
+    address public owner;
+    address public factory;
+    string public electionTitle;
+    bool public isOpen;
 
     // --- Events ---
     event Voted(uint indexed candidateId);
     event MemberJoined(uint256 indexed groupId, uint256 identityCommitment);
+    event NewCandidate(uint id, string name);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can do this");
+        _;
+    }
 
     // --- Constructor ---
-    // 3. We now take BOTH addresses
-    constructor(address _semaphoreAddress, address _cptAddress) {
-        // <-- 3. CONSTRUCTOR UPDATED
-        console.log("Deploying PRIVACY Voting Contract (Phase 3)...");
+    // Updated to accept Owner and Title dynamically
+    constructor(
+        address _semaphoreAddress,
+        address _factoryAddress,
+        address _owner,
+        string memory _title
+    ) {
+        console.log("Deploying Voting Template...");
 
         semaphore = ISemaphore(_semaphoreAddress);
-        cpt = CPT(_cptAddress); // <-- 3. CONSTRUCTOR UPDATED
+        factory = _factoryAddress;
+        owner = _owner;
+        electionTitle = _title;
+        isOpen = true;
 
-        // 4. We call the EXTERNAL 'createGroup' function
+        // Create group. The Voting Contract itself becomes the group admin.
         groupId = semaphore.createGroup();
-
         console.log("Semaphore group created with ID:", groupId);
-
-        addCandidate("Candidate 1");
-        addCandidate("Candidate 2");
     }
 
-    // --- Helper Function (No change) ---
-    function addCandidate(string memory _name) private {
+    // --- Admin Functions ---
+    // Changed from 'private' to 'public onlyOwner' so Organizer can add candidates
+    function addCandidate(string memory _name) public onlyOwner {
+        require(isOpen, "Election closed");
         candidatesCount++;
         candidates[candidatesCount] = Candidate(candidatesCount, _name, 0);
+        emit NewCandidate(candidatesCount, _name);
     }
 
-    // --- Voter Registration Function ---
-    // 5. We call the EXTERNAL 'addMember' function
+    function endElection() public onlyOwner {
+        isOpen = false;
+    }
+
+    // --- Voter Registration ---
     function joinGroup(uint256 identityCommitment) external {
+        require(isOpen, "Election closed");
         semaphore.addMember(groupId, identityCommitment);
         emit MemberJoined(groupId, identityCommitment);
     }
 
-    // --- Anonymous Vote Function ---
-    // 6. We use the 'ISemaphore.SemaphoreProof' type
+    // --- Anonymous Vote ---
     function anonymousVote(
         uint256 candidateId,
         ISemaphore.SemaphoreProof calldata proof,
-        address recipient // <-- 4. RECIPIENT ADDRESS ADDED
+        address recipient
     ) external {
-        // --- 1. Validation ---
+        require(isOpen, "Election closed");
+
+        // 1. Validation
         require(
             candidateId > 0 && candidateId <= candidatesCount,
             "Error: Invalid candidate ID."
@@ -81,18 +103,24 @@ contract Voting {
             "Error: Proof signal does not match candidateId."
         );
 
-        // --- 2. ZKP MAGIC ---
-        // 7. We call the EXTERNAL 'validateProof' function
+        // 2. ZKP Verification
         semaphore.validateProof(groupId, proof);
 
-        // --- 3. State Update ---
+        // 3. State Update
         candidates[candidateId].voteCount++;
-
-        // --- 4. Emit Event ---
         emit Voted(candidateId);
 
-        // --- 5. MINT TOKEN (THE REWARD) ---
-        // We mint 1 CPT (which has 18 decimals)
-        cpt.mint(recipient, 1 * 10 ** 18); // <-- 5. MINT CALL ADDED
+        // 4. REWARD (Via Factory)
+        // Instead of minting directly, we ask the Factory to mint
+        IVotingFactory(factory).distributeReward(recipient);
+    }
+
+    // Helper for Frontend
+    function getAllCandidates() public view returns (Candidate[] memory) {
+        Candidate[] memory allCandidates = new Candidate[](candidatesCount);
+        for (uint i = 1; i <= candidatesCount; i++) {
+            allCandidates[i - 1] = candidates[i];
+        }
+        return allCandidates;
     }
 }
